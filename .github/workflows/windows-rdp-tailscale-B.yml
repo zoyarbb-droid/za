@@ -35,9 +35,9 @@ defaults:
     shell: pwsh
 
 env:
-  RDP_USER: Bullettemporary
-  RDP_PASS: Bullet@12345
-  TS_HOSTNAME: bullet
+  RDP_USER: YourNewUsername
+  RDP_PASS: YourNewPassword
+  TS_HOSTNAME: YourNewHost
 
 jobs:
   rdp:
@@ -47,10 +47,12 @@ jobs:
       - name: 🔧 Resolve inputs (safe)
         id: cfg
         env:
+          # Now fetching sensitive data directly from secrets
           RAW_TAILNET: ${{ secrets.TS_TAILNET }}
           RAW_APIKEY: ${{ secrets.TS_API_KEY }}
           RAW_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           RAW_PAT: ${{ secrets.GH_API_TOKEN }}
+          # Fetching user-defined inputs
           RAW_TEST: ${{ inputs.test_mode == true && 'true' || 'false' }}
           RAW_RUNTIME: ${{ inputs.runtime_minutes || '355' }}
           RAW_LOOPS: ${{ inputs.loops || '0' }}
@@ -113,12 +115,12 @@ jobs:
           Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" | Out-Null
 
-      - name: 🧹 PURGE any devices containing 'bullet' (startup)
+      - name: 🧹 PURGE any devices containing 'YourNewHost' (startup)
         run: |
           $hdr = @{ Authorization = "Bearer ${{ secrets.TS_API_KEY }}" }
           $tn  = [uri]::EscapeDataString("${{ secrets.TS_TAILNET }}")
           $match = { param($d)
-            ($d.name -match '(?i)bullet') -or ($d.hostname -match '(?i)bullet') -or ($d.DNSName -match '(?i)bullet')
+            ($d.name -match '(?i)${{ env.TS_HOSTNAME }}') -or ($d.hostname -match '(?i)${{ env.TS_HOSTNAME }}') -or ($d.DNSName -match '(?i)${{ env.TS_HOSTNAME }}')
           }
           try {
             $resp = Invoke-RestMethod -Method GET -Headers $hdr -Uri "https://api.tailscale.com/api/v2/tailnet/$tn/devices"
@@ -132,7 +134,7 @@ jobs:
             }
           } catch { Write-Warning "Startup purge failed: $_" }
 
-      - name: 🔗 Tailscale up (hostname=bullet) + show IP/FQDN/DERP
+      - name: 🔗 Tailscale up (hostname=YourNewHost) + show IP/FQDN/DERP
         id: up
         run: |
           $ts = "C:\Program Files\Tailscale\tailscale.exe"
@@ -160,13 +162,13 @@ jobs:
             Start-Sleep -Seconds 60
           }
 
-      - name: 🧹 PURGE any devices containing 'bullet' (exit)
+      - name: 🧹 PURGE any devices containing 'YourNewHost' (exit)
         if: always()
         run: |
           $hdr = @{ Authorization = "Bearer ${{ secrets.TS_API_KEY }}" }
           $tn  = [uri]::EscapeDataString("${{ secrets.TS_TAILNET }}")
           $match = { param($d)
-            ($d.name -match '(?i)bullet') -or ($d.hostname -match '(?i)bullet') -or ($d.DNSName -match '(?i)bullet')
+            ($d.name -match '(?i)${{ env.TS_HOSTNAME }}') -or ($d.hostname -match '(?i)${{ env.TS_HOSTNAME }}') -or ($d.DNSName -match '(?i)${{ env.TS_HOSTNAME }}')
           }
           try {
             $resp = Invoke-RestMethod -Method GET -Headers $hdr -Uri "https://api.tailscale.com/api/v2/tailnet/$tn/devices"
@@ -187,10 +189,12 @@ jobs:
           if ($loops -eq 1) { Write-Host "Loops finished; not dispatching."; exit 0 }
           if ($loops -gt 1) { $next=$loops-1 } else { $next=0 }
 
+          # IMPORTANT: Use the PAT (GH_API_TOKEN) for dispatching
           $token="${{ secrets.GH_API_TOKEN }}"
           $body=@{
             ref    = "${{ github.ref_name }}"
             inputs = @{
+              # Pass secrets as explicit inputs to the next workflow to ensure it has them
               ts_tailnet      = "${{ secrets.TS_TAILNET }}"
               ts_api_key      = "${{ secrets.TS_API_KEY }}"
               ts_authkey      = "${{ secrets.TS_AUTHKEY }}"
@@ -205,4 +209,4 @@ jobs:
             -Uri "https://api.github.com/repos/${{ github.repository }}/actions/workflows/windows-rdp-tailscale-A.yml/dispatches" `
             -Headers @{ Authorization = "Bearer $token"; "Accept"="application/vnd.github+json" } `
             -Body $body
-
+            
