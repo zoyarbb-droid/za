@@ -29,10 +29,9 @@ defaults:
     shell: pwsh
 
 env:
-  RDP_USER: YourNewUsername
-  RDP_PASS: YourNewPassword
-  TS_HOSTNAME: YourNewHost
-
+  RDP_USER: Bullettemporary
+  RDP_PASS: Bullet@12345
+  TS_HOSTNAME: bullet
 jobs:
   rdp:
     runs-on: windows-2025
